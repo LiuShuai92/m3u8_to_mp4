@@ -316,6 +316,7 @@ class _NightOnePageState extends State<NightOnePage> {
     return Container(
       color: fillColor,
       child: ListView.separated(
+        physics: const BouncingScrollPhysics(),
         separatorBuilder: (context, index) {
           return const Divider(
             color: Colors.white,
