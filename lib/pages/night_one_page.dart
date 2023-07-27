@@ -34,7 +34,7 @@ class _NightOnePageState extends State<NightOnePage> {
     /*NightOneModel(
         title: '测试',
         videoUrl:
-            'http://1257120875.vod2.myqcloud.com/0ef121cdvodtransgzp1257120875/3055695e5285890780828799271/v.f230.m3u8'),*/
+        'http://1257120875.vod2.myqcloud.com/0ef121cdvodtransgzp1257120875/3055695e5285890780828799271/v.f230.m3u8'),*/
   ];
 
   downloadVideo(List<NightOneModel> list) async {
@@ -396,7 +396,7 @@ class _NightOnePageState extends State<NightOnePage> {
       String outPath = "${dir.path}/$videoTitle.mp4";
       print('LiuShuai: 输出路径: $outPath');
       String cmd =
-          '-allowed_extensions ALL -i ${dir.path}/temp/$videoTitle.m3u8  "$outPath"';
+          '-allowed_extensions ALL -i ${dir.path}/temp/$videoTitle.m3u8 "$outPath"';
       // FFmpegKit
       // ignore: void_checks
       FFmpegKit.executeAsync(cmd);
@@ -407,6 +407,5 @@ class _NightOnePageState extends State<NightOnePage> {
   deleteTempDirectory(Directory dir) {
     Directory directory = Directory('${dir.path}/temp');
     directory.delete(recursive: true);
-    return true;
   }
 }
