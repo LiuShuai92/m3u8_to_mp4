@@ -69,6 +69,7 @@ class _NightOnePageState extends State<NightOnePage> {
       } else {
         dir = await getApplicationDocumentsDirectory();
       }
+      setState(() {});
     });
   }
 
