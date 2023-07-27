@@ -1,4 +1,4 @@
-name: sports_event
+name: m3u8ToMP4
 description: A new Flutter project.
 
 # The following line prevents the package from being accidentally published to
@@ -48,6 +48,11 @@ dependencies:
   window_manager: ^0.2.7
   flutter_hls_parser: ^2.0.0
   ffmpeg_kit_flutter: ^5.1.0
+  universal_platform: ^1.0.0+1
+  run_permission_helper:
+    git:
+      url: git@codeup.aliyun.com:6333b695257dab51ddaa62e9/cs-client/run_permission_helper.git
+      ref: liushuai
 
 dev_dependencies:
   flutter_test:

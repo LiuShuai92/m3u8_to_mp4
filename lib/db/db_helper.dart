@@ -1,11 +1,13 @@
 import 'dart:io';
 
-import 'package:sports_event/db/table_define.dart';
-import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
+import 'package:sqflite/sqflite.dart';
 import 'package:sqflite_common/sqlite_api.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
-import 'package:path_provider/path_provider.dart';
+import 'package:universal_platform/universal_platform.dart';
+
+import 'table_define.dart';
 
 /// 数据库帮助类
 class DbHelper {
@@ -45,7 +47,7 @@ class DbHelper {
     Directory path = await getApplicationDocumentsDirectory();
     late Database db;
     print(p.join(path.path, 'statistics', 'hot.db'));
-    if (Platform.isWindows) {
+    if (UniversalPlatform.isWindows) {
       var databaseFactory = databaseFactoryFfi;
       db = await databaseFactory
           .openDatabase(p.join(path.path, 'statistics', 'hot.db'));
@@ -53,7 +55,7 @@ class DbHelper {
       db.execute(dsTableDefine.createZhihuTable());
       db.execute(dsTableDefine.createWeiboTable());
      
-    } else if (Platform.isMacOS) {
+    } else if (UniversalPlatform.isMacOS) {
       db = await openDatabase(p.join(path.path, 'statistics', 'hot.db'),
           version: 1, onCreate: (db, version) {
         // 数据库创建完成

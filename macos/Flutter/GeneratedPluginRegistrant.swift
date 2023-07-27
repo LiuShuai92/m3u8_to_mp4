@@ -6,7 +6,7 @@ import FlutterMacOS
 import Foundation
 
 import ffmpeg_kit_flutter
-import path_provider_macos
+import path_provider_foundation
 import screen_retriever
 import sqflite
 import url_launcher_macos

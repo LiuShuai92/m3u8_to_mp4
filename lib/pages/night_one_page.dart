@@ -1,15 +1,16 @@
 import 'dart:async';
 import 'dart:io';
+
 import 'package:dio/dio.dart';
 import 'package:ffmpeg_kit_flutter/ffmpeg_kit.dart';
-import 'package:ffmpeg_kit_flutter/ffmpeg_session.dart';
-import 'package:ffmpeg_kit_flutter/log.dart';
-import 'package:ffmpeg_kit_flutter/session_state.dart';
-import 'package:ffmpeg_kit_flutter/statistics.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_hls_parser/flutter_hls_parser.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:sports_event/models/night_one_model.dart';
+import 'package:run_permission_helper/android_permission_manifest.dart';
+import 'package:run_permission_helper/run_permission_helper.dart';
+import 'package:universal_platform/universal_platform.dart';
+
+import '../models/night_one_model.dart';
 
 class NightOnePage extends StatefulWidget {
   const NightOnePage({Key? key}) : super(key: key);
@@ -19,39 +20,71 @@ class NightOnePage extends StatefulWidget {
 }
 
 class _NightOnePageState extends State<NightOnePage> {
-  final TextEditingController _textEditingController = TextEditingController();
+  final TextEditingController _m3u8UrlEditingController =
+      TextEditingController();
   final TextEditingController _titleEditingController = TextEditingController();
 
   final Color fillColor = const Color(0xff2C3040);
 
   List<String?> mediatsList = [];
   List<double> progressValues = [];
+  Directory? dir;
 
   List<NightOneModel> downloadList = [
-    NightOneModel(
-        title: '绝命毒师1',
+    /*NightOneModel(
+        title: '测试',
         videoUrl:
-            'http://1257120875.vod2.myqcloud.com/0ef121cdvodtransgzp1257120875/3055695e5285890780828799271/v.f230.m3u8'),
+            'http://1257120875.vod2.myqcloud.com/0ef121cdvodtransgzp1257120875/3055695e5285890780828799271/v.f230.m3u8'),*/
   ];
 
-
   downloadVideo(List<NightOneModel> list) async {
-    NightOneModel element = list.first;
-    downM3u8File(element.videoUrl, element.title);
+    for (var element in list) {
+      if (!UniversalPlatform.isWeb) {
+        await downM3u8File(element.videoUrl, element.title);
+      }
+    }
+    if (!UniversalPlatform.isWeb) {
+      deleteTempDirectory(dir!);
+    }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    Future.microtask(() async {
+      if (UniversalPlatform.isAndroid) {
+        var result = await RunPermissionHelperPlugin.requestRunPermission(
+          [
+            AndroidPermission.WRITE_EXTERNAL_STORAGE,
+          ],
+        );
+        if (result?.isGranted ?? false) {
+          dir = await getExternalStorageDirectory() ??
+              await getApplicationDocumentsDirectory();
+        } else {
+          dir = await getApplicationDocumentsDirectory();
+        }
+      } else if (UniversalPlatform.isWeb) {
+        dir = Directory("/assets");
+      } else {
+        dir = await getApplicationDocumentsDirectory();
+      }
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-        backgroundColor: const Color(0xff1E202b),
-        body: Container(
-          padding: const EdgeInsets.fromLTRB(20, 40, 20, 20),
-          child: Column(
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                      child: Column(
+      backgroundColor: const Color(0xff1E202b),
+      body: Container(
+        padding: const EdgeInsets.fromLTRB(20, 40, 20, 20),
+        child: Column(
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
                       videoUrlWidget(),
                       const SizedBox(
@@ -59,58 +92,100 @@ class _NightOnePageState extends State<NightOnePage> {
                       ),
                       videoTitleWidget(),
                     ],
-                  )),
-                  const SizedBox(
-                    width: 10,
                   ),
-                  TextButton(
-                      onPressed: () {
-                        downloadVideo(downloadList);
-                      },
-                      child: Container(
-                        color: fillColor,
-                        width: 70,
-                        height: 70,
-                        child: const Center(
-                            child: Text(
-                          '下载',
-                          style: TextStyle(color: Colors.white),
-                        )),
-                      )),
+                ),
+                const SizedBox(
+                  width: 10,
+                ),
+                TextButton(
+                  onPressed: () {
+                    if (_m3u8UrlEditingController.text.isNotEmpty &&
+                        _titleEditingController.text.isNotEmpty) {
+                      if (UniversalPlatform.isWeb) {
+                        /*String cmd =
+                            '-allowed_extensions -i ${_m3u8UrlEditingController.text} "${_titleEditingController.text}"';
+                        FFmpegKit.executeAsync(cmd);*/
+                      } else {
+                        downloadVideo(downloadList
+                          ..add(
+                            NightOneModel(
+                                title: _titleEditingController.text,
+                                videoUrl: _m3u8UrlEditingController.text),
+                          ));
+                      }
+                    }
+                  },
+                  child: Container(
+                    color: fillColor,
+                    width: 70,
+                    height: 70,
+                    child: Center(
+                        child: Text(
+                      UniversalPlatform.isWeb ? "转换" : '下载',
+                      style: const TextStyle(color: Colors.white),
+                    )),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(
+              height: 8,
+            ),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SizedBox(
+                    height: 8,
+                  ),
+                  Text(
+                    "正在下载：${mediatsList.length}",
+                    style: const TextStyle(color: Colors.white),
+                  ),
+                  Text(
+                    "输出路径：${dir?.path}",
+                    style: const TextStyle(color: Colors.white),
+                  ),
+                  const SizedBox(
+                    height: 8,
+                  ),
+                  Expanded(child: tsFileDownloadListWidget()),
                 ],
               ),
-              const SizedBox(
-                height: 8,
-              ),
-              Expanded(
-                child: Column(
-                  children: [
-                    Expanded(
-                      flex: 1,
-                      child: downloadListWidget(downloadList),
-                    ),
-                    const SizedBox(height: 10),
-                    Expanded(
-                        flex: 1,
-                        child: Row(
-                          children: [
-                            Expanded(
-                                flex: 1, child: tsFileDownloadListWidget()),
-                            const VerticalDivider(
-                              color: Colors.white,
-                            ),
-                            Expanded(
-                              flex: 1,
-                              child: Container(color: fillColor),
-                            )
-                          ],
-                        )),
-                  ],
-                ),
-              )
-            ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  //m3u8文件路径 Widget
+  Widget get m3u8FilePathWidget {
+    return Row(
+      children: [
+        const Text(
+          'm3u8文件路径:',
+          style: TextStyle(color: Colors.white),
+        ),
+        const SizedBox(
+          width: 20,
+        ),
+        Expanded(
+          child: TextField(
+            decoration: InputDecoration(
+                contentPadding:
+                    const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+                border: InputBorder.none,
+                filled: true,
+                isCollapsed: true,
+                fillColor: fillColor),
+            controller: _m3u8UrlEditingController,
+            maxLines: 1,
+            style: const TextStyle(fontSize: 14, color: Colors.white),
           ),
-        ));
+        ),
+      ],
+    );
   }
 
   //视频地址 Widget
@@ -133,7 +208,7 @@ class _NightOnePageState extends State<NightOnePage> {
                 filled: true,
                 isCollapsed: true,
                 fillColor: fillColor),
-            controller: _textEditingController,
+            controller: _m3u8UrlEditingController,
             maxLines: 1,
             style: const TextStyle(fontSize: 14, color: Colors.white),
           ),
@@ -240,60 +315,63 @@ class _NightOnePageState extends State<NightOnePage> {
     return Container(
       color: fillColor,
       child: ListView.separated(
-          separatorBuilder: (context, index) {
-            return const Divider(
-              color: Colors.white,
-            );
-          },
-          itemCount: mediatsList.length,
-          itemBuilder: (_, index) {
-            String? url = mediatsList[index];
-            double progress = progressValues[index];
-            return Padding(
-              padding: const EdgeInsets.only(top: 8, left: 8, right: 8),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    url!,
-                    style: const TextStyle(fontSize: 10, color: Colors.white),
-                    maxLines: 2,
-                  ),
-                  const SizedBox(
-                    height: 4,
-                  ),
-                  LinearProgressIndicator(
-                    minHeight: 1,
-                    backgroundColor: Colors.green,
-                    color: Colors.red,
-                    value: progress,
-                  )
-                ],
-              ),
-            );
-          }),
+        separatorBuilder: (context, index) {
+          return const Divider(
+            color: Colors.white,
+          );
+        },
+        itemCount: mediatsList.length,
+        itemBuilder: (_, index) {
+          String? url = mediatsList[index];
+          double progress = progressValues[index];
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 8, left: 8, right: 8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  url ?? "",
+                  style: const TextStyle(fontSize: 10, color: Colors.white),
+                  maxLines: 2,
+                ),
+                const SizedBox(
+                  height: 4,
+                ),
+                LinearProgressIndicator(
+                  minHeight: 1,
+                  backgroundColor: Colors.green,
+                  color: Colors.red,
+                  value: progress,
+                )
+              ],
+            ),
+          );
+        },
+      ),
     );
   }
 
   //1.下载.m3u8文件
-  downM3u8File(String viderUrl, String videoTitle) async {
-    Dio dio = Dio();
-    Directory dir = await getApplicationDocumentsDirectory();
-    String videoPath = "${dir.path}/temp/$videoTitle.m3u8";
-    Response response = await dio.download(viderUrl, videoPath);
+  Future downM3u8File(String videoUrl, String videoTitle) async {
+    final Dio dio = Dio();
+    final String fileName = "$videoTitle.m3u8";
+    String videoPath = "${dir?.path}/temp/$fileName";
+    print('LiuShuai: videoPath = $videoPath');
+    var response = await dio.download(videoUrl, videoPath);
     if (response.statusCode == 200) {
-      return parserM3u8File(dir, viderUrl, videoPath, videoTitle);
+      return parserM3u8File(dir!, videoUrl, videoPath, videoTitle);
     }
   }
 
   //2.解析m3u8文件
-   parserM3u8File(Directory dir, String viderUrl, String videoPath,
+  Future parserM3u8File(Directory dir, String viderUrl, String videoPath,
       String videoTitle) async {
     String host = viderUrl.substring(0, viderUrl.lastIndexOf('/'));
     HlsPlaylist? playList = await HlsPlaylistParser.create()
         .parse(Uri.parse(viderUrl), await File(videoPath).readAsLines());
     if (playList is HlsMasterPlaylist) {
-      return false;
+      return;
     } else if (playList is HlsMediaPlaylist) {
       var mediaPlaylistUrls = playList.segments.map((it) => it.url).toList();
       mediatsList = playList.segments.map((it) => it.url).toList();
@@ -314,12 +392,14 @@ class _NightOnePageState extends State<NightOnePage> {
         });
         mediatsList.removeAt(valueIndex);
       }
+      String outPath = "${dir.path}/$videoTitle.mp4";
+      print('LiuShuai: 输出路径: $outPath');
       String cmd =
-          '-allowed_extensions ALL -i ${dir.path}/temp/$videoTitle.m3u8  "${dir.path}/$videoTitle.mp4"';
+          '-allowed_extensions ALL -i ${dir.path}/temp/$videoTitle.m3u8  "$outPath"';
       // FFmpegKit
       // ignore: void_checks
       FFmpegKit.executeAsync(cmd);
-    } 
+    }
   }
 
   ///4.删除临时文件

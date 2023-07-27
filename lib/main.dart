@@ -1,13 +1,13 @@
-import 'dart:io';
-import 'package:sports_event/db/db_helper.dart';
-import 'package:sports_event/pages/night_one_page.dart';
 import 'package:flutter/material.dart';
-import 'package:sqflite_common_ffi/sqflite_ffi.dart';
+import 'package:universal_platform/universal_platform.dart';
 import 'package:window_manager/window_manager.dart';
+
+import 'pages/night_one_page.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  if (Platform.isMacOS || Platform.isWindows || Platform.isLinux) {
+  var bool = UniversalPlatform.isMacOS || UniversalPlatform.isWindows || UniversalPlatform.isLinux;
+  if (bool) {
     WidgetsFlutterBinding.ensureInitialized();
     await windowManager.ensureInitialized();
     WindowOptions windowOptions = const WindowOptions(
