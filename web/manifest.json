@@ -1,6 +1,6 @@
 {
-    "name": "sports_event",
-    "short_name": "sports_event",
+    "name": "m3u8转mp4格式",
+    "short_name": "m3u8-MP4",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

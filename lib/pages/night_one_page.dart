@@ -2,7 +2,9 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:dio/dio.dart';
+import 'package:download/download.dart';
 import 'package:ffmpeg_kit_flutter/ffmpeg_kit.dart';
+import 'package:ffmpeg_wasm/ffmpeg_wasm.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_hls_parser/flutter_hls_parser.dart';
 import 'package:path_provider/path_provider.dart';
@@ -29,6 +31,7 @@ class _NightOnePageState extends State<NightOnePage> {
   List<String?> mediatsList = [];
   List<double> progressValues = [];
   Directory? dir;
+  double convertProgress = 0;
 
   List<NightOneModel> downloadList = [
     /*NightOneModel(
@@ -39,7 +42,9 @@ class _NightOnePageState extends State<NightOnePage> {
 
   downloadVideo(List<NightOneModel> list) async {
     for (var element in list) {
-      if (!UniversalPlatform.isWeb) {
+      if (UniversalPlatform.isWeb) {
+        await convertToMp4(element.videoUrl, element.title);
+      } else {
         await downM3u8File(element.videoUrl, element.title);
       }
     }
@@ -100,18 +105,12 @@ class _NightOnePageState extends State<NightOnePage> {
                   onPressed: () {
                     if (_m3u8UrlEditingController.text.isNotEmpty &&
                         _titleEditingController.text.isNotEmpty) {
-                      if (UniversalPlatform.isWeb) {
-                        /*String cmd =
-                            '-allowed_extensions -i ${_m3u8UrlEditingController.text} "${_titleEditingController.text}"';
-                        FFmpegKit.executeAsync(cmd);*/
-                      } else {
-                        downloadVideo(downloadList
-                          ..add(
-                            NightOneModel(
-                                title: _titleEditingController.text,
-                                videoUrl: _m3u8UrlEditingController.text),
-                          ));
-                      }
+                      downloadVideo(downloadList
+                        ..add(
+                          NightOneModel(
+                              title: _titleEditingController.text,
+                              videoUrl: _m3u8UrlEditingController.text),
+                        ));
                     }
                   },
                   child: Container(
@@ -133,23 +132,52 @@ class _NightOnePageState extends State<NightOnePage> {
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const SizedBox(
-                    height: 8,
-                  ),
-                  Text(
-                    "正在下载：${mediatsList.length}",
-                    style: const TextStyle(color: Colors.white),
-                  ),
-                  Text(
-                    "输出路径：${dir?.path}",
-                    style: const TextStyle(color: Colors.white),
-                  ),
-                  const SizedBox(
-                    height: 8,
-                  ),
-                  Expanded(child: tsFileDownloadListWidget()),
-                ],
+                children: UniversalPlatform.isWeb
+                    ? [
+                        const SizedBox(
+                          height: 8,
+                        ),
+                        Row(
+                          children: [
+                            const Text(
+                              "当前进度：",
+                              style: TextStyle(color: Colors.white),
+                            ),
+                            const SizedBox(
+                              width: 10,
+                            ),
+                            Expanded(
+                              child: LinearProgressIndicator(
+                                minHeight: 1,
+                                backgroundColor: Colors.green,
+                                color: Colors.red,
+                                value: convertProgress,
+                              ),
+                            )
+                          ],
+                        ),
+                        Text(
+                          "当前状态：$currentState",
+                          style: const TextStyle(color: Colors.white),
+                        ),
+                      ]
+                    : [
+                        const SizedBox(
+                          height: 8,
+                        ),
+                        Text(
+                          "正在下载：${mediatsList.length}",
+                          style: const TextStyle(color: Colors.white),
+                        ),
+                        Text(
+                          "输出路径：${dir?.path}",
+                          style: const TextStyle(color: Colors.white),
+                        ),
+                        const SizedBox(
+                          height: 8,
+                        ),
+                        Expanded(child: tsFileDownloadListWidget()),
+                      ],
               ),
             ),
           ],
@@ -350,6 +378,80 @@ class _NightOnePageState extends State<NightOnePage> {
         },
       ),
     );
+  }
+
+  String currentState = "";
+  static final regex = RegExp(
+    r'frame\s*=\s*(\d+)\s+fps\s*=\s*(\d+(?:\.\d+)?)\s+q\s*=\s*([\d.-]+)\s+L?size\s*=\s*(\d+)\w*\s+time\s*=\s*([\d:\.]+)\s+bitrate\s*=\s*([\d.]+)\s*(\w+)/s\s+speed\s*=\s*([\d.]+)x',
+  );
+
+  Future convertToMp4(String videoUrl, String title) async {
+    print('LiuShuai: convertToMp4');
+    final Dio dio = Dio();
+    // String host = videoUrl.substring(0, videoUrl.lastIndexOf('/'));
+    setState(() {
+      currentState = "加载m3u8...";
+    });
+    Response<String> response = await dio.get<String>(videoUrl);
+    if (response.statusCode == 200) {
+      FFmpeg? ffmpeg;
+      try {
+        final url = Uri.base.resolve('ffmpeg/ffmpeg-core.js').toString();
+        FFmpeg ffmpeg = createFFmpeg(CreateFFmpegParam(log: true, corePath: url));
+        setState(() {
+          currentState = "转换中...";
+        });
+        ffmpeg.setLogger((LoggerParam logger) {
+          if (logger.type == 'fferr') {
+            final match = regex.firstMatch(logger.message);
+
+            if (match != null) {
+              // indicates the number of frames that have been processed so far.
+              final frame = match.group(1);
+              // is the current frame rate
+              final fps = match.group(2);
+              // stands for quality 0.0 indicating lossless compression, other values indicating that there is some lossy compression happening
+              final q = match.group(3);
+              // indicates the size of the output file so far
+              final size = match.group(4);
+              // is the time that has elapsed since the beginning of the conversion
+              final time = match.group(5);
+              // is the current output bitrate
+              final bitrate = match.group(6);
+              // for instance: 'kbits/s'
+              final bitrateUnit = match.group(7);
+              // is the speed at which the conversion is happening, relative to real-time
+              final speed = match.group(8);
+
+              print(
+                  'frame: $frame, fps: $fps, q: $q, size: $size, time: $time, bitrate: $bitrate$bitrateUnit, speed: $speed');
+            }
+          }
+        });
+        ffmpeg.setProgress((ProgressParam progress) {
+          convertProgress = progress.ratio * 100;
+          print('LiuShuai: convertProgress = $convertProgress');
+          setState(() {});
+        });
+        if (!ffmpeg.isLoaded()) {
+          await ffmpeg.load();
+        }
+        final String outputFile = "$title.mp4";
+        String cmd =
+            'ffmpeg -i "$videoUrl" -bsf:a aac_adtstoasc -vcodec copy -c copy $outputFile';
+        print('LiuShuai: cmd = $cmd');
+        await ffmpeg.runCommand(cmd);
+        // download(stream, outputFile);
+        setState(() {
+          currentState = "转换完成...";
+        });
+      } finally {
+        ffmpeg?.exit();
+        setState(() {
+          currentState = "";
+        });
+      }
+    }
   }
 
   //1.下载.m3u8文件
