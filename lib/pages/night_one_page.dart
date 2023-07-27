@@ -64,9 +64,7 @@ class _NightOnePageState extends State<NightOnePage> {
         } else {
           dir = await getApplicationDocumentsDirectory();
         }
-      } else if (UniversalPlatform.isWeb) {
-        dir = Directory("/assets");
-      } else {
+      } else if (!UniversalPlatform.isWeb) {
         dir = await getApplicationDocumentsDirectory();
       }
       setState(() {});
@@ -399,8 +397,7 @@ class _NightOnePageState extends State<NightOnePage> {
       String cmd =
           '-allowed_extensions ALL -i ${dir.path}/temp/$videoTitle.m3u8 "$outPath"';
       // FFmpegKit
-      // ignore: void_checks
-      FFmpegKit.executeAsync(cmd);
+      await FFmpegKit.executeAsync(cmd);
     }
   }
 
