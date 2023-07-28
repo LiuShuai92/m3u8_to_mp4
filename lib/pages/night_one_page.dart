@@ -1,10 +1,14 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 import 'package:download/download.dart';
 import 'package:ffmpeg_kit_flutter/ffmpeg_kit.dart';
 import 'package:ffmpeg_wasm/ffmpeg_wasm.dart';
+import 'package:file/src/backends/memory/memory_file.dart';
+import 'package:file/src/backends/memory/memory_file_system.dart';
+import 'package:file/src/backends/memory/node.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_hls_parser/flutter_hls_parser.dart';
 import 'package:path_provider/path_provider.dart';
@@ -27,11 +31,13 @@ class _NightOnePageState extends State<NightOnePage> {
   final TextEditingController _titleEditingController = TextEditingController();
 
   final Color fillColor = const Color(0xff2C3040);
+  late FFmpeg ffmpeg;
 
   List<String?> mediatsList = [];
   List<double> progressValues = [];
   Directory? dir;
   double convertProgress = 0;
+  int tsListLength = 1;
 
   List<NightOneModel> downloadList = [
     /*NightOneModel(
@@ -43,7 +49,7 @@ class _NightOnePageState extends State<NightOnePage> {
   downloadVideo(List<NightOneModel> list) async {
     for (var element in list) {
       if (UniversalPlatform.isWeb) {
-        await convertToMp4(element.videoUrl, element.title);
+        await convertM3u8UrlToMp4(element.videoUrl, element.title);
       } else {
         await downM3u8File(element.videoUrl, element.title);
       }
@@ -71,6 +77,47 @@ class _NightOnePageState extends State<NightOnePage> {
         }
       } else if (!UniversalPlatform.isWeb) {
         dir = await getApplicationDocumentsDirectory();
+      } else {
+        // Note: CreateFFmpegParam is optional and and corePath is also optional
+        // ffmpeg = createFFmpeg(CreateFFmpegParam(log: true, corePath: 'https://unpkg.com/@ffmpeg/core@0.11.0/dist/ffmpeg-core.js'));
+        final url = Uri.base.resolve('ffmpeg/ffmpeg-core.js').toString();
+        ffmpeg = createFFmpeg(CreateFFmpegParam(log: true, corePath: url));
+        ffmpeg.setLogger((LoggerParam logger) {
+          if (logger.type == 'fferr') {
+            final match = regex.firstMatch(logger.message);
+
+            if (match != null) {
+              // indicates the number of frames that have been processed so far.
+              final frame = match.group(1);
+              // is the current frame rate
+              final fps = match.group(2);
+              // stands for quality 0.0 indicating lossless compression, other values indicating that there is some lossy compression happening
+              final q = match.group(3);
+              // indicates the size of the output file so far
+              final size = match.group(4);
+              // is the time that has elapsed since the beginning of the conversion
+              final time = match.group(5);
+              // is the current output bitrate
+              final bitrate = match.group(6);
+              // for instance: 'kbits/s'
+              final bitrateUnit = match.group(7);
+              // is the speed at which the conversion is happening, relative to real-time
+              final speed = match.group(8);
+
+              print(
+                  'frame: $frame, fps: $fps, q: $q, size: $size, time: $time, bitrate: $bitrate$bitrateUnit, speed: $speed');
+            }
+          }
+        });
+        ffmpeg.setProgress((ProgressParam progress) {
+          convertProgress = progress.ratio;
+          currentState = "转换进度 ${convertProgress * 100}%";
+          setState(() {});
+        });
+        if (!ffmpeg.isLoaded()) {
+          print('ffmpeg loading...');
+          await ffmpeg.load();
+        }
       }
       setState(() {});
     });
@@ -151,7 +198,7 @@ class _NightOnePageState extends State<NightOnePage> {
                                 minHeight: 1,
                                 backgroundColor: Colors.green,
                                 color: Colors.red,
-                                value: convertProgress,
+                                value: mediatsList.length / tsListLength,
                               ),
                             )
                           ],
@@ -394,59 +441,93 @@ class _NightOnePageState extends State<NightOnePage> {
     });
     Response<String> response = await dio.get<String>(videoUrl);
     if (response.statusCode == 200) {
-      FFmpeg? ffmpeg;
-      try {
-        final url = Uri.base.resolve('ffmpeg/ffmpeg-core.js').toString();
-        FFmpeg ffmpeg = createFFmpeg(CreateFFmpegParam(log: true, corePath: url));
+      final String outputPath = "/$title.mp4";
+      MemoryFileSystem memoryFileSystem = MemoryFileSystem();
+      MemoryFile memoryFile =
+          MemoryFile(memoryFileSystem as NodeBasedFileSystem, outputPath);
+    }
+  }
+
+  Future convertM3u8UrlToMp4(String videoUrl, String title) async {
+    final Dio dio = Dio();
+    // String host = videoUrl.substring(0, videoUrl.lastIndexOf('/'));
+    setState(() {
+      currentState = "加载m3u8...";
+    });
+    Response<String> response = await dio.get<String>(
+      videoUrl,
+      /*onReceiveProgress: (int count, int total) {
         setState(() {
-          currentState = "转换中...";
+          currentState = "加载m3u8...";
         });
-        ffmpeg.setLogger((LoggerParam logger) {
-          if (logger.type == 'fferr') {
-            final match = regex.firstMatch(logger.message);
+      },*/
+    );
+    if (response.statusCode == 200) {
+      try {
+        const String memoryDir = "temp/";
+        final String m3u8FilePath = "$memoryDir$title.m3u8";
+        var uint8list = Uint8List.fromList(response.data!.codeUnits);
+        print('LiuShuai: uint8list = $uint8list');
+        ffmpeg.writeFile(m3u8FilePath, uint8list);
 
-            if (match != null) {
-              // indicates the number of frames that have been processed so far.
-              final frame = match.group(1);
-              // is the current frame rate
-              final fps = match.group(2);
-              // stands for quality 0.0 indicating lossless compression, other values indicating that there is some lossy compression happening
-              final q = match.group(3);
-              // indicates the size of the output file so far
-              final size = match.group(4);
-              // is the time that has elapsed since the beginning of the conversion
-              final time = match.group(5);
-              // is the current output bitrate
-              final bitrate = match.group(6);
-              // for instance: 'kbits/s'
-              final bitrateUnit = match.group(7);
-              // is the speed at which the conversion is happening, relative to real-time
-              final speed = match.group(8);
-
-              print(
-                  'frame: $frame, fps: $fps, q: $q, size: $size, time: $time, bitrate: $bitrate$bitrateUnit, speed: $speed');
-            }
-          }
-        });
-        ffmpeg.setProgress((ProgressParam progress) {
-          convertProgress = progress.ratio * 100;
-          print('LiuShuai: convertProgress = $convertProgress');
-          setState(() {});
-        });
-        if (!ffmpeg.isLoaded()) {
-          await ffmpeg.load();
+        MemoryFileSystem memoryFileSystem = MemoryFileSystem();
+        MemoryFile m3u8File =
+            MemoryFile(memoryFileSystem as NodeBasedFileSystem, m3u8FilePath);
+        if (!m3u8File.existsSync()) {
+          m3u8File.create();
         }
-        final String outputFile = "$title.mp4";
-        String cmd =
-            'ffmpeg -i "$videoUrl" -bsf:a aac_adtstoasc -vcodec copy -c copy $outputFile';
+        m3u8File.writeAsBytes(response.data!.codeUnits);
+        String host = videoUrl.substring(0, videoUrl.lastIndexOf('/'));
+        HlsPlaylist? playList = await HlsPlaylistParser.create()
+            .parse(Uri.parse(videoUrl), await m3u8File.readAsLines());
+        print('LiuShuai: playList = ${playList.tags.length}');
+        if (playList is HlsMasterPlaylist) {
+          return;
+        } else if (playList is HlsMediaPlaylist) {
+          var mediaPlaylistUrls =
+              playList.segments.map((it) => it.url).toList();
+          mediatsList = playList.segments.map((it) => it.url).toList();
+          progressValues = List.filled(mediaPlaylistUrls.length, 0.0);
+          tsListLength = mediatsList.length;
+          for (var value in mediaPlaylistUrls) {
+            String tsUrl = '$host/${value!.split('/').last}';
+            int valueIndex = mediatsList.indexOf(value);
+            Response<String> response = await dio.get<String>(tsUrl,
+                onReceiveProgress: (int count, int total) {
+              progressValues[valueIndex] = count / total;
+              setState(() {});
+            });
+            if (response.statusCode == 200) {
+              ffmpeg.writeFile('$memoryDir${value.split('/').last}',
+                  Uint8List.fromList(response.data!.codeUnits));
+            } else {
+              setState(() {
+                currentState = "加载失败";
+              });
+              throw "加载失败";
+            }
+            mediatsList.removeAt(valueIndex);
+          }
+        }
+
+        setState(() {
+          currentState = "开始转换";
+        });
+        final String outputName = "$title.mp4";
+        /*String cmd =
+            'ffmpeg -i "$videoUrl" -c copy -bsf:a aac_adtstoasc "$outputName"';*/
+        String cmd = '-allowed_extensions ALL -i $m3u8FilePath "$outputName"';
+        /*String cmd =
+            'ffmpeg -i "$videoUrl" -bsf:a aac_adtstoasc -vcodec copy -c copy $outputPath';*/
         print('LiuShuai: cmd = $cmd');
         await ffmpeg.runCommand(cmd);
-        // download(stream, outputFile);
         setState(() {
-          currentState = "转换完成...";
+          currentState = "转换完成";
         });
+        final mp4File = ffmpeg.readFile(outputName);
+        download(Stream.fromIterable(mp4File), outputName);
       } finally {
-        ffmpeg?.exit();
+        ffmpeg.exit();
         setState(() {
           currentState = "";
         });
@@ -477,6 +558,7 @@ class _NightOnePageState extends State<NightOnePage> {
     } else if (playList is HlsMediaPlaylist) {
       var mediaPlaylistUrls = playList.segments.map((it) => it.url).toList();
       mediatsList = playList.segments.map((it) => it.url).toList();
+      tsListLength = mediatsList.length;
       progressValues = List.filled(mediaPlaylistUrls.length, 0.0);
       for (var value in mediaPlaylistUrls) {
         String tsUrl = '$host/${value!.split('/').last}';

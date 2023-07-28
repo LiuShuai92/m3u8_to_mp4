@@ -18,6 +18,8 @@
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <meta content="require-corp" http-equiv="Cross-Origin-Embedder-Policy">
+  <meta content="same-origin" http-equiv="Cross-Origin-Opener-Policy">
   <meta name="description" content="A new Flutter project.">
 
   <!-- iOS meta tags & icons -->
@@ -38,8 +40,21 @@
   </script>
   <!-- This script adds the flutter initialization JS code -->
   <script src="flutter.js" defer></script>
+<!--  <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js" crossorigin="anonymous" async></script>-->
   <script src="ffmpeg/ffmpeg.min.js" crossorigin="anonymous" async></script>
-  <script src="coi-serviceworker.js"></script>
+<!--  <script src="ffmpeg/ffmpeg-core.worker.js" crossorigin="anonymous" async></script>-->
+<!--  <script src="ffmpeg/ffmpeg-core.wasm" crossorigin="anonymous" async></script>-->
+<!--  <script src="ffmpeg/ffmpeg-core.js" crossorigin="anonymous" async></script>-->
+  <script src="./coi-serviceworker.js"></script>
+<!--  <script src='https://unpkg.com/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js'></script>-->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/1.3.8/FileSaver.min.js">
+  </script>
+
+  <script>
+        function webSaveAs(blob, name) {
+            saveAs(blob, name);
+        }
+    </script>
 </head>
 <body>
   <script>
@@ -55,6 +70,9 @@
         return appRunner.runApp();
       });
     });
+    const el = document.createElement("div")
+    el.innerHTML = `Cross origin isolated: ${window.crossOriginIsolated ? "✅" : "❌"}`
+    document.body.append(el);
   </script>
 </body>
 </html>

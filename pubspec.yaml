@@ -51,7 +51,8 @@ dependencies:
   universal_platform: ^1.0.0+1
   ffmpeg_wasm: ^1.0.1
   download: ^1.0.0
-  file_picker: ^4.6.1
+#  file_picker: ^4.6.1
+#  idb_shim: ^2.3.1
   run_permission_helper:
     git:
       url: git@codeup.aliyun.com:6333b695257dab51ddaa62e9/cs-client/run_permission_helper.git
