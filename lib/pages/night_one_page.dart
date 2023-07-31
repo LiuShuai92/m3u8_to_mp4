@@ -523,20 +523,20 @@ class _NightOnePageState extends State<NightOnePage> {
       },*/
     );
     if (response.statusCode == 200) {
+      MemoryFile? m3u8File;
+      MemoryFile? outputFile;
       try {
-        const String memoryDir = "temp/";
-        final String m3u8FilePath = "/$memoryDir$title.m3u8";
-        var uint8list = Uint8List.fromList(response.data!.codeUnits);
-        print('LiuShuai: uint8list = $uint8list');
-        ffmpeg.writeFile(m3u8FilePath, uint8list);
-
+        final String m3u8FileName = "$title.m3u8";
+        final List<int> codeUnits = response.data!.codeUnits;
+        // final ByteBuffer buffer = Uint8List.fromList(codeUnits).buffer;
         MemoryFileSystem memoryFileSystem = MemoryFileSystem();
-        MemoryFile m3u8File =
-            MemoryFile(memoryFileSystem as NodeBasedFileSystem, m3u8FilePath);
+        m3u8File =
+            MemoryFile(memoryFileSystem as NodeBasedFileSystem, m3u8FileName);
         if (!m3u8File.existsSync()) {
           m3u8File.create();
         }
-        m3u8File.writeAsBytes(response.data!.codeUnits);
+        m3u8File.writeAsBytes(codeUnits);
+        ffmpeg.writeFile(m3u8FileName, m3u8File.readAsBytesSync());
         String host = videoUrl.substring(0, videoUrl.lastIndexOf('/'));
         HlsPlaylist? playList = await HlsPlaylistParser.create()
             .parse(Uri.parse(videoUrl), await m3u8File.readAsLines());
@@ -558,7 +558,7 @@ class _NightOnePageState extends State<NightOnePage> {
               setState(() {});
             });
             if (response.statusCode == 200) {
-              ffmpeg.writeFile('$memoryDir${value.split('/').last}',
+              ffmpeg.writeFile(value.split('/').last,
                   Uint8List.fromList(response.data!.codeUnits));
             } else {
               setState(() {
@@ -574,9 +574,14 @@ class _NightOnePageState extends State<NightOnePage> {
           currentState = "开始转换";
         });
         final String outputName = "$title.${_fileFormatEditingController.text}";
+        outputFile =
+            MemoryFile(memoryFileSystem as NodeBasedFileSystem, m3u8FileName);
+        if (!outputFile.existsSync()) {
+          outputFile.create();
+        }
         /*String cmd =
             'ffmpeg -i "$videoUrl" -c copy -bsf:a aac_adtstoasc "$outputName"';*/
-        String cmd = '-allowed_extensions ALL -i $m3u8FilePath "$outputName"';
+        String cmd = '-allowed_extensions ALL -i $m3u8FileName "$outputName"';
         /*String cmd =
             'ffmpeg -i "$videoUrl" -bsf:a aac_adtstoasc -vcodec copy -c copy $outputPath';*/
         print('LiuShuai: cmd = $cmd');
@@ -584,13 +589,18 @@ class _NightOnePageState extends State<NightOnePage> {
         setState(() {
           currentState = "转换完成";
         });
-        final mp4File = ffmpeg.readFile(outputName);
-        download(Stream.fromIterable(mp4File), outputName);
+        download(Stream.fromIterable(outputFile.readAsBytesSync()), outputName);
       } finally {
         ffmpeg.exit();
         setState(() {
           currentState = "";
         });
+        if(m3u8File?.isAbsolute?? false){
+          m3u8File?.delete();
+        }
+        if(outputFile?.isAbsolute?? false){
+          outputFile?.delete();
+        }
       }
     }
   }
