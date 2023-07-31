@@ -10,6 +10,7 @@ import 'package:file/src/backends/memory/memory_file.dart';
 import 'package:file/src/backends/memory/memory_file_system.dart';
 import 'package:file/src/backends/memory/node.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_hls_parser/flutter_hls_parser.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:run_permission_helper/android_permission_manifest.dart';
@@ -29,6 +30,7 @@ class _NightOnePageState extends State<NightOnePage> {
   final TextEditingController _m3u8UrlEditingController =
       TextEditingController();
   final TextEditingController _titleEditingController = TextEditingController();
+  final TextEditingController _fileFormatEditingController = TextEditingController();
 
   final Color fillColor = const Color(0xff2C3040);
   late FFmpeg ffmpeg;
@@ -121,6 +123,7 @@ class _NightOnePageState extends State<NightOnePage> {
       }
       setState(() {});
     });
+    _fileFormatEditingController.text = "mp4";
   }
 
   @override
@@ -137,11 +140,15 @@ class _NightOnePageState extends State<NightOnePage> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      videoUrlWidget(),
+                      videoUrlWidget,
                       const SizedBox(
                         height: 8,
                       ),
-                      videoTitleWidget(),
+                      videoTitleWidget,
+                      const SizedBox(
+                        height: 8,
+                      ),
+                      fileFormatWidget,
                     ],
                   ),
                 ),
@@ -216,9 +223,33 @@ class _NightOnePageState extends State<NightOnePage> {
                           "正在下载：${mediatsList.length}",
                           style: const TextStyle(color: Colors.white),
                         ),
+                        const SizedBox(
+                          height: 4,
+                        ),
+                        Text(
+                          "正在下载：${mediatsList.length}",
+                          style: const TextStyle(color: Colors.white),
+                        ),
                         Text(
                           "输出路径：${dir?.path}",
                           style: const TextStyle(color: Colors.white),
+                        ),
+                        TextButton(
+                          onPressed: () {
+                            Clipboard.setData(
+                                ClipboardData(text: dir?.path ?? ""));
+                          },
+                          child: Container(
+                            color: fillColor,
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 20, vertical: 8),
+                            child: const Center(
+                              child: Text(
+                                "复制路径",
+                                style: TextStyle(color: Colors.white),
+                              ),
+                            ),
+                          ),
                         ),
                         const SizedBox(
                           height: 8,
@@ -263,7 +294,7 @@ class _NightOnePageState extends State<NightOnePage> {
   }
 
   //视频地址 Widget
-  Widget videoUrlWidget() {
+  Widget get videoUrlWidget {
     return Row(
       children: [
         const Text(
@@ -292,7 +323,7 @@ class _NightOnePageState extends State<NightOnePage> {
   }
 
   //视频标题 Widget
-  Widget videoTitleWidget() {
+  Widget get videoTitleWidget {
     return Row(
       children: [
         const Text(
@@ -312,6 +343,35 @@ class _NightOnePageState extends State<NightOnePage> {
                 isCollapsed: true,
                 fillColor: fillColor),
             controller: _titleEditingController,
+            maxLines: 1,
+            style: const TextStyle(fontSize: 12, color: Colors.white),
+          ),
+        ),
+      ],
+    );
+  }
+
+  //文件格式 Widget
+  Widget get fileFormatWidget {
+    return Row(
+      children: [
+        const Text(
+          '输出格式:',
+          style: TextStyle(color: Colors.white),
+        ),
+        const SizedBox(
+          width: 20,
+        ),
+        Expanded(
+          child: TextField(
+            decoration: InputDecoration(
+                contentPadding:
+                    const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+                border: InputBorder.none,
+                filled: true,
+                isCollapsed: true,
+                fillColor: fillColor),
+            controller: _fileFormatEditingController,
             maxLines: 1,
             style: const TextStyle(fontSize: 12, color: Colors.white),
           ),
@@ -441,7 +501,7 @@ class _NightOnePageState extends State<NightOnePage> {
     });
     Response<String> response = await dio.get<String>(videoUrl);
     if (response.statusCode == 200) {
-      final String outputPath = "/$title.mp4";
+      final String outputPath = "/$title.${_fileFormatEditingController.text}";
       MemoryFileSystem memoryFileSystem = MemoryFileSystem();
       MemoryFile memoryFile =
           MemoryFile(memoryFileSystem as NodeBasedFileSystem, outputPath);
@@ -465,7 +525,7 @@ class _NightOnePageState extends State<NightOnePage> {
     if (response.statusCode == 200) {
       try {
         const String memoryDir = "temp/";
-        final String m3u8FilePath = "$memoryDir$title.m3u8";
+        final String m3u8FilePath = "/$memoryDir$title.m3u8";
         var uint8list = Uint8List.fromList(response.data!.codeUnits);
         print('LiuShuai: uint8list = $uint8list');
         ffmpeg.writeFile(m3u8FilePath, uint8list);
@@ -513,7 +573,7 @@ class _NightOnePageState extends State<NightOnePage> {
         setState(() {
           currentState = "开始转换";
         });
-        final String outputName = "$title.mp4";
+        final String outputName = "$title.${_fileFormatEditingController.text}";
         /*String cmd =
             'ffmpeg -i "$videoUrl" -c copy -bsf:a aac_adtstoasc "$outputName"';*/
         String cmd = '-allowed_extensions ALL -i $m3u8FilePath "$outputName"';
@@ -576,7 +636,7 @@ class _NightOnePageState extends State<NightOnePage> {
         });
         mediatsList.removeAt(valueIndex);
       }
-      String outPath = "${dir.path}/$videoTitle.mp4";
+      String outPath = "${dir.path}/$videoTitle.${_fileFormatEditingController.text}";
       print('LiuShuai: 输出路径: $outPath');
       String cmd =
           '-allowed_extensions ALL -i ${dir.path}/temp/$videoTitle.m3u8 "$outPath"';
