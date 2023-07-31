@@ -30,7 +30,9 @@ class _NightOnePageState extends State<NightOnePage> {
   final TextEditingController _m3u8UrlEditingController =
       TextEditingController();
   final TextEditingController _titleEditingController = TextEditingController();
-  final TextEditingController _fileFormatEditingController = TextEditingController();
+  final TextEditingController _fileFormatEditingController =
+      TextEditingController();
+  final MemoryFileSystem memoryFileSystem = MemoryFileSystem();
 
   final Color fillColor = const Color(0xff2C3040);
   late FFmpeg ffmpeg;
@@ -205,7 +207,7 @@ class _NightOnePageState extends State<NightOnePage> {
                                 minHeight: 1,
                                 backgroundColor: Colors.green,
                                 color: Colors.red,
-                                value: mediatsList.length / tsListLength,
+                                value: 1 - mediatsList.length / tsListLength,
                               ),
                             )
                           ],
@@ -523,24 +525,22 @@ class _NightOnePageState extends State<NightOnePage> {
       },*/
     );
     if (response.statusCode == 200) {
-      MemoryFile? m3u8File;
-      MemoryFile? outputFile;
+      List<MemoryFile> tempFile = [];
       try {
         final String m3u8FileName = "$title.m3u8";
         final List<int> codeUnits = response.data!.codeUnits;
         // final ByteBuffer buffer = Uint8List.fromList(codeUnits).buffer;
-        MemoryFileSystem memoryFileSystem = MemoryFileSystem();
-        m3u8File =
+        MemoryFile m3u8File =
             MemoryFile(memoryFileSystem as NodeBasedFileSystem, m3u8FileName);
         if (!m3u8File.existsSync()) {
           m3u8File.create();
         }
+        tempFile.add(m3u8File);
         m3u8File.writeAsBytes(codeUnits);
         ffmpeg.writeFile(m3u8FileName, m3u8File.readAsBytesSync());
         String host = videoUrl.substring(0, videoUrl.lastIndexOf('/'));
         HlsPlaylist? playList = await HlsPlaylistParser.create()
             .parse(Uri.parse(videoUrl), await m3u8File.readAsLines());
-        print('LiuShuai: playList = ${playList.tags.length}');
         if (playList is HlsMasterPlaylist) {
           return;
         } else if (playList is HlsMediaPlaylist) {
@@ -558,8 +558,15 @@ class _NightOnePageState extends State<NightOnePage> {
               setState(() {});
             });
             if (response.statusCode == 200) {
-              ffmpeg.writeFile(value.split('/').last,
-                  Uint8List.fromList(response.data!.codeUnits));
+              value.split('/').last;
+              final String tsPath = value.split('/').last;
+              MemoryFile tsFile =
+                  MemoryFile(memoryFileSystem as NodeBasedFileSystem, tsPath);
+              if (!tsFile.existsSync()) {
+                tsFile.create();
+              }
+              tempFile.add(tsFile);
+              tsFile.writeAsBytes(response.data!.codeUnits);
             } else {
               setState(() {
                 currentState = "加载失败";
@@ -574,11 +581,12 @@ class _NightOnePageState extends State<NightOnePage> {
           currentState = "开始转换";
         });
         final String outputName = "$title.${_fileFormatEditingController.text}";
-        outputFile =
+        MemoryFile outputFile =
             MemoryFile(memoryFileSystem as NodeBasedFileSystem, m3u8FileName);
         if (!outputFile.existsSync()) {
           outputFile.create();
         }
+        tempFile.add(outputFile);
         /*String cmd =
             'ffmpeg -i "$videoUrl" -c copy -bsf:a aac_adtstoasc "$outputName"';*/
         String cmd = '-allowed_extensions ALL -i $m3u8FileName "$outputName"';
@@ -594,11 +602,12 @@ class _NightOnePageState extends State<NightOnePage> {
         setState(() {
           currentState = "";
         });
-        if(m3u8File?.isAbsolute?? false){
-          m3u8File?.delete();
-        }
-        if(outputFile?.isAbsolute?? false){
-          outputFile?.delete();
+        if (tempFile.isNotEmpty) {
+          for (var file in tempFile) {
+            if(file.existsSync()){
+              await file.delete();
+            }
+          }
         }
       }
     }
@@ -645,7 +654,8 @@ class _NightOnePageState extends State<NightOnePage> {
         });
         mediatsList.removeAt(valueIndex);
       }
-      String outPath = "${dir.path}/$videoTitle.${_fileFormatEditingController.text}";
+      String outPath =
+          "${dir.path}/$videoTitle.${_fileFormatEditingController.text}";
       print('LiuShuai: 输出路径: $outPath');
       String cmd =
           '-allowed_extensions ALL -i ${dir.path}/temp/$videoTitle.m3u8 "$outPath"';
