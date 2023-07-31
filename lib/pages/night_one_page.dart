@@ -584,7 +584,6 @@ class _NightOnePageState extends State<NightOnePage> {
         String cmd = '-allowed_extensions ALL -i $m3u8FileName "$outputName"';
         /*String cmd =
             'ffmpeg -i "$videoUrl" -bsf:a aac_adtstoasc -vcodec copy -c copy $outputPath';*/
-        print('LiuShuai: cmd = $cmd');
         await ffmpeg.runCommand(cmd);
         setState(() {
           currentState = "转换完成";
